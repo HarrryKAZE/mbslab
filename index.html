@@ -94,6 +94,10 @@
         .add-code-section button:hover {
             background-color: #218838;
         }
+        .add-code-section button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
         /* Message box for copy confirmation */
         .message-box {
             position: fixed;
@@ -132,7 +136,7 @@
             <p>Use the form below to add your own code snippets to the document. They will be saved and available on your next visit.</p>
             <input type="text" id="code-title" placeholder="Enter title for your code block">
             <textarea id="code-input" rows="10" placeholder="Enter your MATLAB or any other code here..."></textarea>
-            <button onclick="addCodeBlock()">Add Code</button>
+            <button id="add-code-btn" onclick="addCodeBlock()" disabled>Add Code</button>
         </div>
     </div>
 
@@ -177,6 +181,8 @@
                 onAuthStateChanged(auth, (user) => {
                     if (user) {
                         userId = user.uid;
+                        // Enable the "Add Code" button now that Firebase is ready
+                        document.getElementById('add-code-btn').disabled = false;
                         // Load code blocks once the user is authenticated
                         loadCodeBlocks();
                     } else {
@@ -326,6 +332,83 @@
         // Expose addCodeBlock to the global scope so it can be called from the button
         window.addCodeBlock = addCodeBlock;
     </script>
-
 </body>
 </html>
+<!--
+    =====================================================================
+    DEPLOYMENT GUIDE FOR FIREBASE HOSTING
+    =====================================================================
+    
+    Here are the step-by-step instructions to deploy this HTML file to Firebase Hosting
+    and get your .web.app URL.
+    
+    ---------------------------------------------------------------------
+    STEP 1: Create a Firebase Project
+    ---------------------------------------------------------------------
+    1.  Go to the Firebase console: https://console.firebase.google.com/
+    2.  Click "Add project" and follow the prompts to create a new project.
+    
+    ---------------------------------------------------------------------
+    STEP 2: Install Firebase CLI
+    ---------------------------------------------------------------------
+    1.  Open your command-line interface (Terminal, PowerShell, or Command Prompt).
+    2.  Run the following command to install the Firebase CLI. (You need Node.js installed first).
+    
+        npm install -g firebase-tools
+    
+    ---------------------------------------------------------------------
+    STEP 3: Log in to Firebase
+    ---------------------------------------------------------------------
+    1.  In your command line, run the login command.
+    
+        firebase login
+    
+    2.  This will open a browser window. Follow the steps to log in with your Google account.
+    
+    ---------------------------------------------------------------------
+    STEP 4: Initialize Your Project
+    ---------------------------------------------------------------------
+    1.  Create a new, empty folder on your computer for your project (e.g., `my-website`).
+    2.  In your command line, navigate to your project folder:
+    
+        cd /path/to/my-website
+    
+    3.  Run the initialization command:
+    
+        firebase init
+    
+    4.  When prompted, make the following selections:
+        -   **Which Firebase features do you want to set up?**
+            Use the spacebar to select `Hosting: Configure files for Firebase Hosting...` and press Enter.
+        -   **Select a default Firebase project for this directory:**
+            Choose `Use an existing project` and select the project you created in Step 1.
+        -   **What do you want to use as your public directory?**
+            Type `public` and press Enter.
+        -   **Configure as a single-page app (rewrite all URLs to /index.html)?**
+            Type `N` for No.
+        -   **Set up automatic builds and deploys with GitHub?**
+            Type `N` for No.
+    
+    This will create a `public` folder and some configuration files.
+    
+    ---------------------------------------------------------------------
+    STEP 5: Replace Your `index.html` File
+    ---------------------------------------------------------------------
+    **This is the most critical step to get your app to display correctly.**
+    1.  Open the `public` folder that Firebase just created.
+    2.  Locate the `index.html` file inside it.
+    3.  **Delete all of the existing code** in that file.
+    4.  **Copy all of the code from this Canvas document** and paste it directly into the empty `index.html` file.
+    5.  Save the file.
+    
+    ---------------------------------------------------------------------
+    STEP 6: Deploy Again
+    ---------------------------------------------------------------------
+    1.  From your project's root directory, run the deploy command:
+    
+        firebase deploy
+    
+    After a few moments, the command line will output a "Hosting URL." This is your live website.
+    
+    =====================================================================
+-->
