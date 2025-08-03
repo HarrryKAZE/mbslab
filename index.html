@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MATLAB Code Experiments</title>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        .container {
+            max-width: 900px;
+            margin: auto;
+            padding: 20px;
+            background-color: #fff;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            border-radius: 8px;
+        }
+        .code-wrapper {
+            position: relative;
+            margin-bottom: 30px;
+        }
+        pre {
+            background-color: #e8e8e8;
+            padding: 15px;
+            border: 1px solid #ddd;
+            overflow-x: auto;
+            border-radius: 6px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        h2 {
+            color: #34495e;
+            border-bottom: 2px solid #34495e;
+            padding-bottom: 5px;
+            margin-top: 30px;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #34495e;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            transition: background-color 0.3s ease;
+        }
+        .copy-btn:hover {
+            background-color: #2c3e50;
+        }
+        .copy-btn svg {
+            margin-right: 5px;
+        }
+        .add-code-section {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px dashed #ccc;
+        }
+        .add-code-section textarea,
+        .add-code-section input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-family: inherit;
+        }
+        .add-code-section button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .add-code-section button:hover {
+            background-color: #218838;
+        }
+        /* Message box for copy confirmation */
+        .message-box {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #333;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+        }
+        .message-box.show {
+            opacity: 1;
+        }
+        #loading-indicator {
+            text-align: center;
+            font-style: italic;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>MATLAB Code Experiments</h1>
+        <div id="code-blocks-container">
+            <!-- Code blocks will be dynamically loaded here from Firestore -->
+            <p id="loading-indicator">Loading code blocks...</p>
+        </div>
+        
+        <div class="add-code-section">
+            <h2>Add New Code Block</h2>
+            <p>Use the form below to add your own code snippets to the document. They will be saved and available on your next visit.</p>
+            <input type="text" id="code-title" placeholder="Enter title for your code block">
+            <textarea id="code-input" rows="10" placeholder="Enter your MATLAB or any other code here..."></textarea>
+            <button onclick="addCodeBlock()">Add Code</button>
+        </div>
+    </div>
+
+    <!-- Message box for copy confirmation -->
+    <div id="message-box" class="message-box">Code copied to clipboard!</div>
+
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables for Firebase configuration
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // Initialize Firebase
+        let app;
+        let db;
+        let auth;
+        let userId;
+
+        /**
+         * Initializes Firebase and authenticates the user.
+         */
+        async function initializeFirebase() {
+            try {
+                // Initialize the app with the provided config
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Authenticate the user
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Listen for authentication state changes
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        // Load code blocks once the user is authenticated
+                        loadCodeBlocks();
+                    } else {
+                        // User is signed out. For this app, we'll use an anonymous ID.
+                        userId = 'anonymous_' + crypto.randomUUID();
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error initializing Firebase or authenticating:", error);
+                document.getElementById('loading-indicator').textContent = "Failed to load code blocks. Please check the console for errors.";
+            }
+        }
+
+        /**
+         * Loads code blocks from Firestore and displays them.
+         * Uses a real-time listener (onSnapshot).
+         */
+        function loadCodeBlocks() {
+            if (!db || !userId) {
+                console.error("Firebase DB or User ID not available.");
+                return;
+            }
+
+            const codeBlocksRef = collection(db, `artifacts/${appId}/users/${userId}/codeBlocks`);
+            const q = query(codeBlocksRef);
+
+            // Set up a real-time listener for the collection
+            onSnapshot(q, (querySnapshot) => {
+                const container = document.getElementById('code-blocks-container');
+                container.innerHTML = ''; // Clear existing blocks
+                
+                if (querySnapshot.empty) {
+                    container.innerHTML = '<p id="loading-indicator">No code blocks found. Add one below!</p>';
+                } else {
+                    querySnapshot.forEach((doc) => {
+                        const data = doc.data();
+                        addCodeBlockToDOM(data.title, data.code);
+                    });
+                }
+            }, (error) => {
+                console.error("Error fetching code blocks:", error);
+                document.getElementById('loading-indicator').textContent = "Error loading code blocks.";
+            });
+        }
+        
+        /**
+         * Adds a code block to the DOM.
+         * @param {string} title The title of the code block.
+         * @param {string} code The code content.
+         */
+        function addCodeBlockToDOM(title, code) {
+            const container = document.getElementById('code-blocks-container');
+            const newBlock = document.createElement('div');
+            newBlock.classList.add('code-block');
+            newBlock.innerHTML = `
+                <h2>${title}</h2>
+                <div class="code-wrapper">
+                    <button class="copy-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                            <path d="M10.854 7.146a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7.5 9.793l2.646-2.647a.5.5 0 0 1 .708 0z"/>
+                            <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1c-.446 0-.81.168-1.1.43l-.116.113-.538.56c-.055.057-.107.113-.156.177-.036.049-.071.1-.106.155-.024.037-.047.075-.069.11-.005.008-.009.013-.013.018-.014.025-.028.05-.041.074-.019.034-.037.067-.054.101-.008.016-.017.033-.024.049-.009.022-.016.043-.023.064-.007.02-.013.04-.019.06-.002.007-.005.014-.007.02l-.001.003-.014.044-.012.046-.006.024-.004.018a.196.196 0 0 1-.005.025v.001c-.002.008-.003.015-.005.023l-.001.002-.004.024a.14.14 0 0 1-.002.016c-.001.007-.001.013-.002.02l-.001.007a.08.08 0 0 1 0 .013v.001c-.001.006-.001.012-.001.018l-.001.004-.001.01a.11.11 0 0 1 0 .01V5c0-.552.448-1 1-1h1zm1-1h-.5a1 1 0 0 0-1 1v.058c.241-.1.542-.149.85-.149h.5a1 1 0 0 1 1 1V5h2.95a1 1 0 0 0 1-1V3.5a1 1 0 0 0-1-1h-1.5a1.5 1.5 0 0 1-1-1.5V1H9a1.5 1.5 0 0 1-1.5-1.5V1H6a1.5 1.5 0 0 1-1.5 1.5V1H4a1.5 1.5 0 0 1-1.5-1.5V1zm3 1h3.5a.5.5 0 0 1 .5.5V3a.5.5 0 0 1-.5.5h-3.5a.5.5 0 0 1-.5-.5V2a.5.5 0 0 1 .5-.5z"/>
+                        </svg>
+                        Copy
+                    </button>
+                    <pre id="${'code' + Date.now()}"><code>${code}</code></pre>
+                </div>
+            `;
+            container.appendChild(newBlock);
+        }
+
+        // The user-facing function to add a new code block
+        async function addCodeBlock() {
+            const titleInput = document.getElementById('code-title');
+            const codeInput = document.getElementById('code-input');
+            
+            const title = titleInput.value.trim();
+            const code = codeInput.value.trim();
+
+            if (title === '' || code === '') {
+                showMessage('Please enter both a title and code.');
+                return;
+            }
+
+            if (!db || !userId) {
+                showMessage('Firebase is not yet initialized. Please wait a moment and try again.');
+                return;
+            }
+
+            const codeBlocksRef = collection(db, `artifacts/${appId}/users/${userId}/codeBlocks`);
+            
+            try {
+                await addDoc(codeBlocksRef, {
+                    title: title,
+                    code: code,
+                    timestamp: serverTimestamp() // Add a server timestamp to order by
+                });
+                showMessage('Code block added successfully!');
+                titleInput.value = '';
+                codeInput.value = '';
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                showMessage('Failed to add code block.');
+            }
+        }
+
+        // Function to show a temporary message box
+        function showMessage(message) {
+            const messageBox = document.getElementById('message-box');
+            messageBox.textContent = message;
+            messageBox.classList.add('show');
+            setTimeout(() => {
+                messageBox.classList.remove('show');
+            }, 2000); // Hide after 2 seconds
+        }
+
+        // Function to copy code to clipboard
+        function copyCode(button) {
+            const codeBlock = button.nextElementSibling;
+            if (codeBlock) {
+                const textToCopy = codeBlock.textContent || codeBlock.innerText;
+                const tempTextarea = document.createElement('textarea');
+                tempTextarea.value = textToCopy;
+                document.body.appendChild(tempTextarea);
+                tempTextarea.select();
+                try {
+                    document.execCommand('copy');
+                    showMessage('Code copied to clipboard!');
+                } catch (err) {
+                    console.error('Failed to copy text: ', err);
+                } finally {
+                    document.body.removeChild(tempTextarea);
+                }
+            }
+        }
+        
+        // Event delegation for copy buttons
+        document.addEventListener('click', function(event) {
+            if (event.target.closest('.copy-btn')) {
+                copyCode(event.target.closest('.copy-btn'));
+            }
+        });
+
+        // Initialize the app on page load
+        initializeFirebase();
+
+        // Expose addCodeBlock to the global scope so it can be called from the button
+        window.addCodeBlock = addCodeBlock;
+    </script>
+
+</body>
+</html>
